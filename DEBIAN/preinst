@@ -1,0 +1,26 @@
+#!/bin/sh
+
+folder_app="/Applications/iCouchPotato.app/"
+folder_data="/var/mobile/Documents/JypyzProducts/iCouchPotato/"
+
+echo
+
+if [ -f ${folder_data}settings.conf ] ;then
+	echo Data OK!
+else
+	mkdir -p $folder_data 
+	
+	if [ -f ${folder_app}settings.conf ] ;then
+		echo Moving data...
+		mv ${folder_app}cache ${folder_data}
+		mv ${folder_app}db_backup ${folder_data}
+		mv ${folder_app}logs ${folder_data}
+		mv ${folder_app}couchpotato.db* ${folder_data}
+		mv ${folder_app}settings.conf* ${folder_data}
+	else
+		echo Fresh install!
+	fi
+fi
+echo
+echo Pre-flight Done!
+echo

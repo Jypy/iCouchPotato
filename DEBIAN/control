@@ -1,0 +1,14 @@
+Package: eu.jypy.icouchpotato
+Version: 2.6.3
+Section: Jypyz.Products.iCOUCH
+Priority: standard
+Installed-Size: 
+Maintainer: Jean-Philippe Bouillot (Jypy) <jypyzproducts@jypy.eu>
+Pre-Depends: firmware (>= 3.0)
+Depends: eu.jypy.iconpack, python, eu.jypy.python-cheetah-ios, eu.jypy.python-yenc-ios
+Architecture: iphoneos-arm
+Name: iCouchPotato
+Author: Jean-Philippe Bouillot (Jypy) <jypyzproducts@jypy.eu>
+Depiction: http://jypy.eu/products/iCOUCH_main.html
+Description: CouchPotato NZBs/torrents downloader for iDevices
+Sponsor: Jypy.eu <http://jypy.eu>
