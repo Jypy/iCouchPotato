@@ -23,7 +23,7 @@ import requests
 from requests.packages.urllib3 import disable_warnings
 from tornado.httpserver import HTTPServer
 from tornado.web import Application, StaticFileHandler, RedirectHandler
-
+from couchpotato.core.softchroot import SoftChrootInitError
 
 def getOptions(args):
 
@@ -216,6 +216,19 @@ def runCouchPotato(options, base_path, args, data_dir = None, log_dir = None, En
     log = CPLog(__name__)
     log.debug('Started with options %s', options)
 
+    # Check soft-chroot dir exists:
+    try:
+        # Load Soft-Chroot
+        soft_chroot = Env.get('softchroot')
+        soft_chroot_dir = Env.setting('soft_chroot', section = 'core', default = None, type='unicode' )
+        soft_chroot.initialize(soft_chroot_dir)
+    except SoftChrootInitError as exc:
+        log.error(exc)
+        return
+    except:
+        log.error('Unable to check whether SOFT-CHROOT is defined')
+        return
+
     # Check available space
     try:
         total_space, available_space = getFreeSpace(data_dir)
@@ -333,9 +346,10 @@ def runCouchPotato(options, base_path, args, data_dir = None, log_dir = None, En
     while try_restart:
         try:
             server.listen(config['port'], config['host'])
-            
-            try: server.listen(config['port'], config['host6'])
-            except: log.info2('Tried to bind to IPV6 but failed')
+
+            if Env.setting('ipv6', default = False):
+                try: server.listen(config['port'], config['host6'])
+                except: log.info2('Tried to bind to IPV6 but failed')
 
             loop.start()
             server.close_all_connections()

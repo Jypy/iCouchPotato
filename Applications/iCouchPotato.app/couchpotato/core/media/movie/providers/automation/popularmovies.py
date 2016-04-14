@@ -17,11 +17,12 @@ class PopularMovies(Automation):
         movies = []
         retrieved_movies = self.getJsonData(self.url)
 
-        for movie in retrieved_movies.get('movies'):
-            imdb_id = movie.get('imdb_id')
-            info = fireEvent('movie.info', identifier = imdb_id, extended = False, merge = True)
-            if self.isMinimalMovie(info):
-                movies.append(imdb_id)
+        if retrieved_movies:
+            for movie in retrieved_movies:
+                imdb_id = movie.get('imdb_id')
+                info = fireEvent('movie.info', identifier = imdb_id, extended = False, merge = True)
+                if self.isMinimalMovie(info):
+                    movies.append(imdb_id)
 
         return movies
 
@@ -34,7 +35,7 @@ config = [{
             'list': 'automation_providers',
             'name': 'popularmovies_automation',
             'label': 'Popular Movies',
-            'description': 'Imports the <a href="http://movies.stevenlu.com/">top titles of movies that have been in theaters</a>. Script provided by <a href="https://github.com/sjlu/popular-movies">Steven Lu</a>',
+            'description': 'Imports the <a href="http://movies.stevenlu.com/" target="_blank">top titles of movies that have been in theaters</a>. Script provided by <a href="https://github.com/sjlu/popular-movies" target="_blank">Steven Lu</a>',
             'options': [
                 {
                     'name': 'automation_enabled',

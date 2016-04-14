@@ -13,10 +13,10 @@ log = CPLog(__name__)
 class Base(TorrentProvider):
 
     urls = {
-        'test': 'https://awesome-hd.net/',
-        'detail': 'https://awesome-hd.net/torrents.php?torrentid=%s',
-        'search': 'https://awesome-hd.net/searchapi.php?action=imdbsearch&passkey=%s&imdb=%s&internal=%s',
-        'download': 'https://awesome-hd.net/torrents.php?action=download&id=%s&authkey=%s&torrent_pass=%s',
+        'test': 'https://awesome-hd.me/',
+        'detail': 'https://awesome-hd.me/torrents.php?torrentid=%s',
+        'search': 'https://awesome-hd.me/searchapi.php?action=imdbsearch&passkey=%s&imdb=%s&internal=%s',
+        'download': 'https://awesome-hd.me/torrents.php?action=download&id=%s&authkey=%s&torrent_pass=%s',
     }
     http_time_between_calls = 1
 
@@ -29,7 +29,7 @@ class Base(TorrentProvider):
                 soup = BeautifulSoup(data)
 
                 if soup.find('error'):
-                    log.error(soup.find('error').get_text())
+                    log.info(soup.find('error').get_text())
                     return
 
                 authkey = soup.find('authkey').get_text()
@@ -45,20 +45,28 @@ class Base(TorrentProvider):
                     resolution = entry.find('resolution').get_text()
                     encoding = entry.find('encoding').get_text()
                     freeleech = entry.find('freeleech').get_text()
-                    torrent_desc = '/ %s / %s / %s ' % (releasegroup, resolution, encoding)
+                    media = entry.find('media').get_text()
+                    audioformat = entry.find('audioformat').get_text()
 
-                    if freeleech == '0.25' and self.conf('prefer_internal'):
-                        torrent_desc += '/ Internal'
+                    # skip audio channel only releases
+                    if resolution == '':
+                        continue
+
+                    torrent_desc = '%s.%s.%s.%s-%s' % (resolution, media, audioformat, encoding, releasegroup)
+
+                    if self.conf('prefer_internal') and freeleech in ['0.25', '0.50']:
                         torrentscore += 200
 
                     if encoding == 'x264' and self.conf('favor') in ['encode', 'both']:
-                        torrentscore += 300
-                    if re.search('Remux', encoding) and self.conf('favor') in ['remux', 'both']:
+                        torrentscore += 200
+                    elif re.search('Remux', encoding) and self.conf('favor') in ['remux', 'both']:
                         torrentscore += 200
 
+                    name = re.sub(r'\W', '.', name)
+                    name = re.sub(r'\.+', '.', name)
                     results.append({
                         'id': torrent_id,
-                        'name': re.sub('[^A-Za-z0-9\-_ \(\).]+', '', '%s (%s) %s' % (name, year, torrent_desc)),
+                        'name': '%s.%s.%s' % (name, year, torrent_desc),
                         'url': self.urls['download'] % (torrent_id, authkey, self.conf('passkey')),
                         'detail_url': self.urls['detail'] % torrent_id,
                         'size': tryInt(entry.find('size').get_text()) / 1048576,

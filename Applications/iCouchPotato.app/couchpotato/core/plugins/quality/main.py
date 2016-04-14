@@ -23,9 +23,10 @@ class QualityPlugin(Plugin):
     }
 
     qualities = [
+		{'identifier': '2160p', 'hd': True, 'allow_3d': True, 'size': (10000, 650000), 'median_size': 20000, 'label': '2160p', 'width': 3840, 'height': 2160, 'alternative': [], 'allow': [], 'ext':['mkv'], 'tags': ['x264', 'h264', '2160']},
         {'identifier': 'bd50', 'hd': True, 'allow_3d': True, 'size': (20000, 60000), 'median_size': 40000, 'label': 'BR-Disk', 'alternative': ['bd25', ('br', 'disk')], 'allow': ['1080p'], 'ext':['iso', 'img'], 'tags': ['bdmv', 'certificate', ('complete', 'bluray'), 'avc', 'mvc']},
-        {'identifier': '1080p', 'hd': True, 'allow_3d': True, 'size': (4000, 20000), 'median_size': 10000, 'label': '1080p', 'width': 1920, 'height': 1080, 'alternative': [], 'allow': [], 'ext':['mkv', 'm2ts', 'ts'], 'tags': ['m2ts', 'x264', 'h264']},
-        {'identifier': '720p', 'hd': True, 'allow_3d': True, 'size': (3000, 10000), 'median_size': 5500, 'label': '720p', 'width': 1280, 'height': 720, 'alternative': [], 'allow': [], 'ext':['mkv', 'ts'], 'tags': ['x264', 'h264']},
+        {'identifier': '1080p', 'hd': True, 'allow_3d': True, 'size': (4000, 20000), 'median_size': 10000, 'label': '1080p', 'width': 1920, 'height': 1080, 'alternative': [], 'allow': [], 'ext':['mkv', 'm2ts', 'ts'], 'tags': ['m2ts', 'x264', 'h264', '1080']},
+        {'identifier': '720p', 'hd': True, 'allow_3d': True, 'size': (3000, 10000), 'median_size': 5500, 'label': '720p', 'width': 1280, 'height': 720, 'alternative': [], 'allow': [], 'ext':['mkv', 'ts'], 'tags': ['x264', 'h264', '720']},
         {'identifier': 'brrip', 'hd': True, 'allow_3d': True, 'size': (700, 7000), 'median_size': 2000, 'label': 'BR-Rip', 'alternative': ['bdrip', ('br', 'rip'), 'hdtv', 'hdrip'], 'allow': ['720p', '1080p'], 'ext':['mp4', 'avi'], 'tags': ['webdl', ('web', 'dl')]},
         {'identifier': 'dvdr', 'size': (3000, 10000), 'median_size': 4500, 'label': 'DVD-R', 'alternative': ['br2dvd', ('dvd', 'r')], 'allow': [], 'ext':['iso', 'img', 'vob'], 'tags': ['pal', 'ntsc', 'video_ts', 'audio_ts', ('dvd', 'r'), 'dvd9']},
         {'identifier': 'dvdrip', 'size': (600, 2400), 'median_size': 1500, 'label': 'DVD-Rip', 'width': 720, 'alternative': [('dvd', 'rip')], 'allow': [], 'ext':['avi'], 'tags': [('dvd', 'rip'), ('dvd', 'xvid'), ('dvd', 'divx')]},
@@ -65,6 +66,7 @@ class QualityPlugin(Plugin):
         })
 
         addEvent('app.initialize', self.fill, priority = 10)
+        addEvent('app.load', self.fillBlank, priority = 120)
 
         addEvent('app.test', self.doTest)
 
@@ -146,7 +148,18 @@ class QualityPlugin(Plugin):
             'success': False
         }
 
-    def fill(self):
+    def fillBlank(self):
+        db = get_db()
+
+        try:
+            existing = list(db.all('quality'))
+            if len(self.qualities) > len(existing):
+                log.error('Filling in new qualities')
+                self.fill(reorder = True)
+        except:
+            log.error('Failed filling quality database with new qualities: %s', traceback.format_exc())
+
+    def fill(self, reorder = False):
 
         try:
             db = get_db()
@@ -156,7 +169,7 @@ class QualityPlugin(Plugin):
 
                 existing = None
                 try:
-                    existing = db.get('quality', q.get('identifier'))
+                    existing = db.get('quality', q.get('identifier'), with_doc = reorder)
                 except RecordNotFound:
                     pass
 
@@ -179,6 +192,10 @@ class QualityPlugin(Plugin):
                         'finish': [True],
                         'wait_for': [0],
                     })
+                elif reorder:
+                    log.info2('Updating quality order')
+                    existing['doc']['order'] = order
+                    db.update(existing['doc'])
 
                 order += 1
 
@@ -271,8 +288,8 @@ class QualityPlugin(Plugin):
         words = words[:-1]
 
         points = {
-            'identifier': 20,
-            'label': 20,
+            'identifier': 25,
+            'label': 25,
             'alternative': 20,
             'tags': 11,
             'ext': 5,
@@ -298,7 +315,7 @@ class QualityPlugin(Plugin):
                     # Don't score twice on same tag
                     scored_on.append(ss(alt).lower())
 
-        # Check extention
+        # Check extension
         for ext in quality.get('ext', []):
             if ext == extension:
                 log.debug('Found %s with .%s extension in %s', (quality['identifier'], ext, cur_file))
@@ -487,11 +504,14 @@ class QualityPlugin(Plugin):
             'Movie Name (2014).mkv': {'size': 4500, 'quality': '720p', 'extra': {'titles': ['Movie Name 2014 720p Bluray']}},
             'Movie Name (2015).mkv': {'size': 500, 'quality': '1080p', 'extra': {'resolution_width': 1920}},
             'Movie Name (2015).mp4': {'size': 6500, 'quality': 'brrip'},
-            'Movie Name (2015).mp4': {'size': 6500, 'quality': 'brrip'},
             'Movie Name.2014.720p Web-Dl Aac2.0 h264-ReleaseGroup': {'size': 3800, 'quality': 'brrip'},
             'Movie Name.2014.720p.WEBRip.x264.AC3-ReleaseGroup': {'size': 3000, 'quality': 'scr'},
             'Movie.Name.2014.1080p.HDCAM.-.ReleaseGroup': {'size': 5300, 'quality': 'cam'},
             'Movie.Name.2014.720p.HDSCR.4PARTS.MP4.AAC.ReleaseGroup': {'size': 2401, 'quality': 'scr'},
+            'Movie.Name.2014.720p.BluRay.x264-ReleaseGroup': {'size': 10300, 'quality': '720p'},
+            'Movie.Name.2014.720.Bluray.x264.DTS-ReleaseGroup': {'size': 9700, 'quality': '720p'},
+            'Movie Name 2015 2160p SourceSite WEBRip DD5 1 x264-ReleaseGroup': {'size': 21800, 'quality': '2160p'},
+            'Movie Name 2012 2160p WEB-DL FLAC 5 1 x264-ReleaseGroup': {'size': 59650, 'quality': '2160p'}
         }
 
         correct = 0

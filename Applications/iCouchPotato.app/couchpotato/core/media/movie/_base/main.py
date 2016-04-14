@@ -34,6 +34,7 @@ class MovieBase(MovieTypeBase):
             'params': {
                 'identifier': {'desc': 'IMDB id of the movie your want to add.'},
                 'profile_id': {'desc': 'ID of quality profile you want the add the movie in. If empty will use the default profile.'},
+                'force_readd': {'desc': 'Force re-add even if movie already in wanted or manage. Default: True'},
                 'category_id': {'desc': 'ID of category you want the add the movie in. If empty will use no category.'},
                 'title': {'desc': 'Movie title to use for searches. Has to be one of the titles returned by movie.search.'},
             }
@@ -78,19 +79,13 @@ class MovieBase(MovieTypeBase):
         if not info or (info and len(info.get('titles', [])) == 0):
             info = fireEvent('movie.info', merge = True, extended = False, identifier = params.get('identifier'))
 
-        # Set default title
-        default_title = toUnicode(info.get('title'))
-        titles = info.get('titles', [])
-        counter = 0
-        def_title = None
-        for title in titles:
-            if (len(default_title) == 0 and counter == 0) or len(titles) == 1 or title.lower() == toUnicode(default_title.lower()) or (toUnicode(default_title) == six.u('') and toUnicode(titles[0]) == title):
-                def_title = toUnicode(title)
-                break
-            counter += 1
+        # Allow force re-add overwrite from param
+        if 'force_readd' in params:
+            fra = params.get('force_readd')
+            force_readd = fra.lower() not in ['0', '-1'] if not isinstance(fra, bool) else fra
 
-        if not def_title:
-            def_title = toUnicode(titles[0])
+        # Set default title
+        def_title = self.getDefaultTitle(info)
 
         # Default profile and category
         default_profile = {}
@@ -224,11 +219,11 @@ class MovieBase(MovieTypeBase):
 
                 try:
                     m = db.get('id', media_id)
-                    m['profile_id'] = kwargs.get('profile_id')
+                    m['profile_id'] = kwargs.get('profile_id') or m['profile_id']
 
                     cat_id = kwargs.get('category_id')
                     if cat_id is not None:
-                        m['category_id'] = cat_id if len(cat_id) > 0 else None
+                        m['category_id'] = cat_id if len(cat_id) > 0 else m['category_id']
 
                     # Remove releases
                     for rel in fireEvent('release.for_media', m['_id'], single = True):
@@ -249,6 +244,7 @@ class MovieBase(MovieTypeBase):
                     fireEventAsync('movie.searcher.single', movie_dict, on_complete = self.createNotifyFront(media_id))
 
                 except:
+                    print traceback.format_exc()
                     log.error('Can\'t edit non-existing media')
 
             return {
@@ -305,20 +301,8 @@ class MovieBase(MovieTypeBase):
             log.debug('Adding titles: %s', titles)
 
             # Define default title
-            if default_title:
-                def_title = None
-                if default_title:
-                    counter = 0
-                    for title in titles:
-                        if title.lower() == toUnicode(default_title.lower()) or (toUnicode(default_title) == six.u('') and toUnicode(titles[0]) == title):
-                            def_title = toUnicode(title)
-                            break
-                        counter += 1
-
-                if not def_title:
-                    def_title = toUnicode(titles[0])
-
-                media['title'] = def_title
+            if default_title or media.get('title') == 'UNKNOWN' or len(media.get('title', '')) == 0:
+                media['title'] = self.getDefaultTitle(info, default_title)
 
             # Files
             image_urls = info.get('images', [])

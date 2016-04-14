@@ -2,6 +2,7 @@ var NotificationBase = new Class({
 
 	Extends: BlockBase,
 	Implements: [Options, Events],
+	stopped: false,
 
 	initialize: function(options){
 		var self = this;
@@ -20,20 +21,19 @@ var NotificationBase = new Class({
 		self.notifications = [];
 		App.addEvent('load', function(){
 
-			App.block.notification = new Block.Menu(self, {
-				'button_class': 'icon2.eye-open',
+			App.block.notification = new BlockMenu(self, {
+				'button_class': 'icon-notifications',
 				'class': 'notification_menu',
 				'onOpen': self.markAsRead.bind(self)
 			});
 			$(App.block.notification).inject(App.getBlock('search'), 'after');
 			self.badge = new Element('div.badge').inject(App.block.notification, 'top').hide();
 
+			requestTimeout(function(){
+				self.startInterval();
+			}, $(window).getSize().x <= 480 ? 2000 : 100);
+
 		});
-
-		window.addEvent('load', function(){
-			self.startInterval.delay($(window).getSize().x <= 480 ? 2000 : 100, self);
-		})
-
 	},
 
 	notify: function(result){
@@ -46,16 +46,15 @@ var NotificationBase = new Class({
 			new Element('span.'+(result.read ? 'read' : '' )).adopt(
 				new Element('span.message', {'html': result.message}),
 				new Element('span.added', {'text': added.timeDiffInWords(), 'title': added})
-			)
-		, 'top');
+			), 'top');
 		self.notifications.include(result);
 
 		if((result.important !== undefined || result.sticky !== undefined) && !result.read){
 			var sticky = true;
-			App.trigger('message', [result.message, sticky, result])
+			App.trigger('message', [result.message, sticky, result]);
 		}
 		else if(!result.read){
-			self.setBadge(self.notifications.filter(function(n){ return !n.read}).length)
+			self.setBadge(self.notifications.filter(function(n){ return !n.read; }).length);
 		}
 
 	},
@@ -63,7 +62,7 @@ var NotificationBase = new Class({
 	setBadge: function(value){
 		var self = this;
 		self.badge.set('text', value);
-		self.badge[value ? 'show' : 'hide']()
+		self.badge[value ? 'show' : 'hide']();
 	},
 
 	markAsRead: function(force_ids){
@@ -72,13 +71,13 @@ var NotificationBase = new Class({
 
 		if(!force_ids) {
 			var rn = self.notifications.filter(function(n){
-				return !n.read && n.important === undefined
+				return !n.read && n.important === undefined;
 			});
 
-			var ids = [];
+			ids = [];
 			rn.each(function(n){
-				ids.include(n._id)
-			})
+				ids.include(n._id);
+			});
 		}
 
 		if(ids.length > 0)
@@ -87,9 +86,9 @@ var NotificationBase = new Class({
 					'ids': ids.join(',')
 				},
 				'onSuccess': function(){
-					self.setBadge('')
+					self.setBadge('');
 				}
-			})
+			});
 
 	},
 
@@ -102,17 +101,17 @@ var NotificationBase = new Class({
 		}
 
 		self.request = Api.request('notification.listener', {
-    		'data': {'init':true},
-    		'onSuccess': function(json){
-				self.processData(json, true)
+			'data': {'init':true},
+			'onSuccess': function(json){
+				self.processData(json, true);
 			}
 		}).send();
 
-		setInterval(function(){
+		requestInterval(function(){
 
 			if(self.request && self.request.isRunning()){
 				self.request.cancel();
-				self.startPoll()
+				self.startPoll();
 			}
 
 		}, 120000);
@@ -129,16 +128,16 @@ var NotificationBase = new Class({
 			self.request.cancel();
 
 		self.request = Api.request('nonblock/notification.listener', {
-    		'onSuccess': function(json){
-				self.processData(json, false)
+			'onSuccess': function(json){
+				self.processData(json, false);
 			},
-    		'data': {
-    			'last_id': self.last_id
-    		},
-    		'onFailure': function(){
-    			self.startPoll.delay(2000, self)
-    		}
-		}).send()
+			'data': {
+				'last_id': self.last_id
+			},
+			'onFailure': function(){
+				requestTimeout(self.startPoll.bind(self), 2000);
+			}
+		}).send();
 
 	},
 
@@ -160,11 +159,11 @@ var NotificationBase = new Class({
 			});
 
 			if(json.result.length > 0)
-				self.last_id = json.result.getLast().message_id
+				self.last_id = json.result.getLast().message_id;
 		}
 
 		// Restart poll
-		self.startPoll.delay(1500, self);
+		requestTimeout(self.startPoll.bind(self), 1500);
 	},
 
 	showMessage: function(message, sticky, data){
@@ -175,23 +174,23 @@ var NotificationBase = new Class({
 
 		var new_message = new Element('div', {
 			'class': 'message' + (sticky ? ' sticky' : ''),
-			'html': message
+			'html': '<div class="inner">' + message + '</div>'
 		}).inject(self.message_container, 'top');
 
-		setTimeout(function(){
-			new_message.addClass('show')
+		requestTimeout(function(){
+			new_message.addClass('show');
 		}, 10);
 
 		var hide_message = function(){
 			new_message.addClass('hide');
-			setTimeout(function(){
+			requestTimeout(function(){
 				new_message.destroy();
 			}, 1000);
 		};
 
 		if(sticky)
 			new_message.grab(
-				new Element('a.close.icon2', {
+				new Element('a.icon-cancel', {
 					'events': {
 						'click': function(){
 							self.markAsRead([data._id]);
@@ -201,7 +200,7 @@ var NotificationBase = new Class({
 				})
 			);
 		else
-			setTimeout(hide_message, 4000);
+			requestTimeout(hide_message, 4000);
 
 	},
 
@@ -211,8 +210,8 @@ var NotificationBase = new Class({
 
 		var setting_page = App.getPage('Settings');
 		setting_page.addEvent('create', function(){
-			Object.each(setting_page.tabs.notifications.groups, self.addTestButton.bind(self))
-		})
+			Object.each(setting_page.tabs.notifications.groups, self.addTestButton.bind(self));
+		});
 
 	},
 
@@ -222,7 +221,7 @@ var NotificationBase = new Class({
 
 		if(button_name.contains('Notifications')) return;
 
-		new Element('.ctrlHolder.test_button').adopt(
+		new Element('.ctrlHolder.test_button').grab(
 			new Element('a.button', {
 				'text': button_name,
 				'events': {
@@ -235,20 +234,21 @@ var NotificationBase = new Class({
 
 								button.set('text', button_name);
 
+								var message;
 								if(json.success){
-									var message = new Element('span.success', {
+									message = new Element('span.success', {
 										'text': 'Notification successful'
-									}).inject(button, 'after')
+									}).inject(button, 'after');
 								}
 								else {
-									var message = new Element('span.failed', {
+									message = new Element('span.failed', {
 										'text': 'Notification failed. Check logs for details.'
-									}).inject(button, 'after')
+									}).inject(button, 'after');
 								}
 
-								(function(){
+								requestTimeout(function(){
 									message.destroy();
-								}).delay(3000)
+								}, 3000);
 							}
 						});
 					}
@@ -258,7 +258,7 @@ var NotificationBase = new Class({
 	},
 
 	testButtonName: function(fieldset){
-		var name = String(fieldset.getElement('h2').innerHTML).substring(0,String(fieldset.getElement('h2').innerHTML).indexOf("<span")); //.get('text');
+		var name = fieldset.getElement('h2 .group_label').get('text');
 		return 'Test '+name;
 	}
 

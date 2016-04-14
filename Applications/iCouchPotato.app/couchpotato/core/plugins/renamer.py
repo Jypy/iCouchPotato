@@ -141,11 +141,16 @@ class Renamer(Plugin):
         cat_list = fireEvent('category.all', single = True) or []
         no_process.extend([item['destination'] for item in cat_list])
 
-        # Check to see if the no_process folders are inside the "from" folder.
-        if not os.path.isdir(base_folder) or not os.path.isdir(to_folder):
-            log.error('Both the "To" and "From" folder have to exist.')
+        # Don't continue if from-folder doesn't exist
+        if not os.path.isdir(base_folder):
+            log.error('The from folder "%s" doesn\'t exist. Please create it.', base_folder)
+            return
+        # Don't continue if to-folder doesn't exist
+        elif not os.path.isdir(to_folder):
+            log.error('The to folder "%s" doesn\'t exist. Please create it.', to_folder)
             return
         else:
+            # Check to see if the no_process folders are inside the "from" folder.
             for item in no_process:
                 if isSubFolder(item, base_folder):
                     log.error('To protect your data, the media libraries can\'t be inside of or the same as the "from" folder. "%s" in "%s"', (item, base_folder))
@@ -500,19 +505,21 @@ class Renamer(Plugin):
                             group['meta_data']['quality'], {'identifier': release['quality'], 'is_3d': release.get('is_3d', False)}, profile, single = True)
 
                         if is_higher == 'higher':
-                            log.info('Removing lesser or not wanted quality %s for %s.', (media_title, release.get('quality')))
-                            for file_type in release.get('files', {}):
-                                for release_file in release['files'][file_type]:
-                                    remove_files.append(release_file)
-                            remove_releases.append(release)
+                            if self.conf('remove_lower_quality_copies'):
+                                log.info('Removing lesser or not wanted quality %s for %s.', (media_title, release.get('quality')))
+                                for file_type in release.get('files', {}):
+                                    for release_file in release['files'][file_type]:
+                                        remove_files.append(release_file)
+                                remove_releases.append(release)
 
                         # Same quality, but still downloaded, so maybe repack/proper/unrated/directors cut etc
                         elif is_higher == 'equal':
-                            log.info('Same quality release already exists for %s, with quality %s. Assuming repack.', (media_title, release.get('quality')))
-                            for file_type in release.get('files', {}):
-                                for release_file in release['files'][file_type]:
-                                    remove_files.append(release_file)
-                            remove_releases.append(release)
+                            if self.conf('remove_lower_quality_copies'):
+                                log.info('Same quality release already exists for %s, with quality %s. Assuming repack.', (media_title, release.get('quality')))
+                                for file_type in release.get('files', {}):
+                                    for release_file in release['files'][file_type]:
+                                        remove_files.append(release_file)
+                                remove_releases.append(release)
 
                         # Downloaded a lower quality, rename the newly downloaded files/folder to exclude them from scan
                         else:
@@ -650,7 +657,7 @@ class Renamer(Plugin):
                     group_folder = media_folder
                 else:
                     # Delete the first empty subfolder in the tree relative to the 'from' folder
-                    group_folder = sp(os.path.join(base_folder, os.path.relpath(group['parentdir'], base_folder).split(os.path.sep)[0]))
+                    group_folder = sp(os.path.join(base_folder, toUnicode(os.path.relpath(group['parentdir'], base_folder)).split(os.path.sep)[0]))
 
                 try:
                     if self.conf('cleanup') or self.conf('move_leftover'):
@@ -800,7 +807,7 @@ Remove it if you want it to be renamed (again, or at least let it try again)
             ignore_files.extend(fnmatch.filter([sp(os.path.join(root, filename)) for filename in filenames], '*%s.ignore' % tag))
 
         # Match all found ignore files with the tag_files and return True found
-        for tag_file in tag_files:
+        for tag_file in [tag_files] if isinstance(tag_files,str) else tag_files:
             ignore_file = fnmatch.filter(ignore_files, fnEscape('%s.%s.ignore' % (os.path.splitext(tag_file)[0], tag if tag else '*')))
             if ignore_file:
                 return True
@@ -886,8 +893,8 @@ Remove it if you want it to be renamed (again, or at least let it try again)
                 replaced = replaced.replace('<' + x + '>', '')
 
         if self.conf('replace_doubles'):
-           replaced = self.replaceDoubles(replaced.lstrip('. '))       
-        
+            replaced = self.replaceDoubles(replaced.lstrip('. '))
+
         for x, r in replacements.items():
             if x in ['thename', 'namethe']:
                 replaced = replaced.replace(six.u('<%s>') % toUnicode(x), toUnicode(r))
@@ -900,7 +907,7 @@ Remove it if you want it to be renamed (again, or at least let it try again)
 
         replaces = [
             ('\.+', '.'), ('_+', '_'), ('-+', '-'), ('\s+', ' '), (' \\\\', '\\\\'), (' /', '/'),
-            ('(\s\.)+', '.'), ('(-\.)+', '.'), ('(\s-)+', '-'),
+            ('(\s\.)+', '.'), ('(-\.)+', '.'), ('(\s-[^\s])+', '-'),
         ]
 
         for r in replaces:
@@ -966,6 +973,7 @@ Remove it if you want it to be renamed (again, or at least let it try again)
 
             try:
                 for rel in rels:
+                    if not rel.get('media_id'): continue
                     movie_dict = db.get('id', rel.get('media_id'))
                     download_info = rel.get('download_info')
 
@@ -1000,14 +1008,14 @@ Remove it if you want it to be renamed (again, or at least let it try again)
                                 break
 
                     if not found_release:
-                        log.info('%s not found in downloaders', nzbname)
-
                         #Check status if already missing and for how long, if > 1 week, set to ignored else to missing
                         if rel.get('status') == 'missing':
                             if rel.get('last_edit') < int(time.time()) - 7 * 24 * 60 * 60:
+                                log.info('%s not found in downloaders after 7 days, setting status to ignored', nzbname)
                                 fireEvent('release.update_status', rel.get('_id'), status = 'ignored', single = True)
                         else:
                             # Set the release to missing
+                            log.info('%s not found in downloaders, setting status to missing', nzbname)
                             fireEvent('release.update_status', rel.get('_id'), status = 'missing', single = True)
 
                         # Continue with next release
@@ -1202,7 +1210,10 @@ Remove it if you want it to be renamed (again, or at least let it try again)
 
             log.info('Archive %s found. Extracting...', os.path.basename(archive['file']))
             try:
-                rar_handle = RarFile(archive['file'], custom_path = self.conf('unrar_path'))
+                unrar_path = self.conf('unrar_path')
+                unrar_path = unrar_path if unrar_path and (os.path.isfile(unrar_path) or re.match('^[a-zA-Z0-9_/\.\-]+$', unrar_path)) else None
+
+                rar_handle = RarFile(archive['file'], custom_path = unrar_path)
                 extr_path = os.path.join(from_folder, os.path.relpath(os.path.dirname(archive['file']), folder))
                 self.makeDir(extr_path)
                 for packedinfo in rar_handle.infolist():
@@ -1217,6 +1228,9 @@ Remove it if you want it to be renamed (again, or at least let it try again)
                                 log.error('Rar modify date enabled, but failed: %s', traceback.format_exc())
                         extr_files.append(extr_file_path)
                 del rar_handle
+                # Tag archive as extracted if no cleanup.
+                if not cleanup and os.path.isfile(extr_file_path):
+                    self.tagRelease(release_download = {'folder': os.path.dirname(archive['file']), 'files': [archive['file']]}, tag = 'extracted')
             except Exception as e:
                 log.error('Failed to extract %s: %s %s', (archive['file'], e, traceback.format_exc()))
                 continue
@@ -1275,7 +1289,7 @@ rename_options = {
     'pre': '<',
     'post': '>',
     'choices': {
-        'ext': 'Extention (mkv)',
+        'ext': 'Extension (mkv)',
         'namethe': 'Moviename, The',
         'thename': 'The Moviename',
         'year': 'Year (2011)',
@@ -1326,7 +1340,7 @@ config = [{
                 {
                     'name': 'to',
                     'type': 'directory',
-                    'description': 'Default folder where the movies are moved to.',
+                    'description': 'Default folder where the movies are moved/copied/linked to.',
                 },
                 {
                     'name': 'folder_name',
@@ -1345,12 +1359,12 @@ config = [{
                     'options': rename_options
                 },
                 {
-                    'advanced': True,                
+                    'advanced': True,
                     'name': 'replace_doubles',
                     'type': 'bool',
                     'label': 'Clean Name',
-                    'description': ('Attempt to clean up double separaters due to missing data for fields.','Sometimes this eliminates wanted white space (see <a href="https://github.com/RuudBurger/CouchPotatoServer/issues/2782">#2782</a>).'),
-                    'default': True 
+                    'description': ('Attempt to clean up double separaters due to missing data for fields.','Sometimes this eliminates wanted white space (see <a href="https://github.com/CouchPotato/CouchPotatoServer/issues/2782">#2782</a>).'),
+                    'default': True
                 },
                 {
                     'name': 'unrar',
@@ -1375,6 +1389,13 @@ config = [{
                     'type': 'bool',
                     'description': 'Cleanup leftover files after successful rename.',
                     'default': False,
+                },
+                {
+                    'name': 'remove_lower_quality_copies',
+                    'type': 'bool',
+                    'label': 'Delete Others',
+                    'description': 'Remove lower/equal quality copies of a release after downloading.',
+                    'default': True,
                 },
                 {
                     'advanced': True,
@@ -1444,7 +1465,7 @@ config = [{
                     'default': 'link',
                     'type': 'dropdown',
                     'values': [('Link', 'link'), ('Copy', 'copy'), ('Move', 'move')],
-                    'description': 'See above. It is prefered to use link when downloading torrents as it will save you space, while still beeing able to seed.',
+                    'description': 'See above. It is prefered to use link when downloading torrents as it will save you space, while still being able to seed.',
                     'advanced': True,
                 },
                 {
@@ -1461,7 +1482,7 @@ config = [{
             'tab': 'renamer',
             'name': 'meta_renamer',
             'label': 'Advanced renaming',
-            'description': 'Meta data file renaming. Use &lt;filename&gt; to use the above "File naming" settings, without the file extention.',
+            'description': 'Meta data file renaming. Use &lt;filename&gt; to use the above "File naming" settings, without the file extension.',
             'advanced': True,
             'options': [
                 {

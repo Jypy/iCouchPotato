@@ -29,7 +29,7 @@ class Scanner(Plugin):
                        'thumbs.db', 'ehthumbs.db', 'desktop.ini']  # unpacking, smb-crap, hidden files
     ignore_names = ['extract', 'extracting', 'extracted', 'movie', 'movies', 'film', 'films', 'download', 'downloads', 'video_ts', 'audio_ts', 'bdmv', 'certificate']
     extensions = {
-        'movie': ['mkv', 'wmv', 'avi', 'mpg', 'mpeg', 'mp4', 'm2ts', 'iso', 'img', 'mdf', 'ts', 'm4v'],
+        'movie': ['mkv', 'wmv', 'avi', 'mpg', 'mpeg', 'mp4', 'm2ts', 'iso', 'img', 'mdf', 'ts', 'm4v', 'flv'],
         'movie_extra': ['mds'],
         'dvd': ['vts_*', 'vob'],
         'nfo': ['nfo', 'txt', 'tag'],
@@ -63,17 +63,18 @@ class Scanner(Plugin):
     }
 
     file_sizes = {  # in MB
-        'movie': {'min': 300},
-        'trailer': {'min': 2, 'max': 250},
+        'movie': {'min': 200},
+        'trailer': {'min': 2, 'max': 199},
         'backdrop': {'min': 0, 'max': 5},
     }
 
     codecs = {
         'audio': ['DTS', 'AC3', 'AC3D', 'MP3'],
-        'video': ['x264', 'H264', 'DivX', 'Xvid']
+        'video': ['x264', 'H264', 'x265', 'H265', 'DivX', 'Xvid']
     }
 
     resolutions = {
+		'2160p': {'resolution_width': 3840, 'resolution_height': 2160, 'aspect': 1.78},
         '1080p': {'resolution_width': 1920, 'resolution_height': 1080, 'aspect': 1.78},
         '1080i': {'resolution_width': 1920, 'resolution_height': 1080, 'aspect': 1.78},
         '720p': {'resolution_width': 1280, 'resolution_height': 720, 'aspect': 1.78},
@@ -105,7 +106,7 @@ class Scanner(Plugin):
     }
 
     clean = '([ _\,\.\(\)\[\]\-]|^)(3d|hsbs|sbs|half.sbs|full.sbs|ou|half.ou|full.ou|extended|extended.cut|directors.cut|french|fr|swedisch|sw|danish|dutch|nl|swesub|subs|spanish|german|ac3|dts|custom|dc|divx|divx5|dsr|dsrip|dutch|dvd|dvdr|dvdrip|dvdscr|dvdscreener|screener|dvdivx|cam|fragment|fs|hdtv|hdrip' \
-            '|hdtvrip|webdl|web.dl|webrip|web.rip|internal|limited|multisubs|ntsc|ogg|ogm|pal|pdtv|proper|repack|rerip|retail|r3|r5|bd5|se|svcd|swedish|german|read.nfo|nfofix|unrated|ws|telesync|ts|telecine|tc|brrip|bdrip|video_ts|audio_ts|480p|480i|576p|576i|720p|720i|1080p|1080i|hrhd|hrhdtv|hddvd|bluray|x264|h264|xvid|xvidvd|xxx|www.www|hc|\[.*\])(?=[ _\,\.\(\)\[\]\-]|$)'
+            '|hdtvrip|webdl|web.dl|webrip|web.rip|internal|limited|multisubs|ntsc|ogg|ogm|pal|pdtv|proper|repack|rerip|retail|r3|r5|bd5|se|svcd|swedish|german|read.nfo|nfofix|unrated|ws|telesync|ts|telecine|tc|brrip|bdrip|video_ts|audio_ts|480p|480i|576p|576i|720p|720i|1080p|1080i|hrhd|hrhdtv|hddvd|bluray|x264|h264|x265|h265|xvid|xvidvd|xxx|www.www|hc|\[.*\])(?=[ _\,\.\(\)\[\]\-]|$)'
     multipart_regex = [
         '[ _\.-]+cd[ _\.-]*([0-9a-d]+)',  #*cd1
         '[ _\.-]+dvd[ _\.-]*([0-9a-d]+)',  #*dvd1
@@ -519,7 +520,7 @@ class Scanner(Plugin):
             p = enzyme.parse(filename)
 
             # Video codec
-            vc = ('H264' if p.video[0].codec == 'AVC1' else p.video[0].codec)
+            vc = ('H264' if p.video[0].codec == 'AVC1' else 'x265' if p.video[0].codec == 'HEVC' else p.video[0].codec)
 
             # Audio codec
             ac = p.audio[0].codec
@@ -569,7 +570,7 @@ class Scanner(Plugin):
             scan_result = []
             for p in paths:
                 if not group['is_dvd']:
-                    video = Video.from_path(sp(p))
+                    video = Video.from_path(toUnicode(sp(p)))
                     video_result = [(video, video.scan())]
                     scan_result.extend(video_result)
 
@@ -797,6 +798,10 @@ class Scanner(Plugin):
         identifier = file_path.replace(folder, '').lstrip(os.path.sep) # root folder
         identifier = os.path.splitext(identifier)[0] # ext
 
+        # Exclude file name path if needed (f.e. for DVD files)
+        if exclude_filename:
+            identifier = identifier[:len(identifier) - len(os.path.split(identifier)[-1])]
+
         # Make sure the identifier is lower case as all regex is with lower case tags
         identifier = identifier.lower()
 
@@ -804,9 +809,6 @@ class Scanner(Plugin):
             path_split = splitString(identifier, os.path.sep)
             identifier = path_split[-2] if len(path_split) > 1 and len(path_split[-2]) > len(path_split[-1]) else path_split[-1] # Only get filename
         except: pass
-
-        if exclude_filename:
-            identifier = identifier[:len(identifier) - len(os.path.split(identifier)[-1])]
 
         # multipart
         identifier = self.removeMultipart(identifier)

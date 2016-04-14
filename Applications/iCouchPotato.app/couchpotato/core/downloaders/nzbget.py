@@ -253,7 +253,7 @@ config = [{
             'list': 'download_providers',
             'name': 'nzbget',
             'label': 'NZBGet',
-            'description': 'Use <a href="http://nzbget.sourceforge.net/Main_Page" target="_blank">NZBGet</a> to download NZBs.',
+            'description': 'Use <a href="http://nzbget.net" target="_blank">NZBGet</a> to download NZBs.',
             'wizard': True,
             'options': [
                 {
@@ -295,8 +295,8 @@ config = [{
                     'advanced': True,
                     'default': '0',
                     'type': 'dropdown',
-                    'values': [('Very Low', -100), ('Low', -50), ('Normal', 0), ('High', 50), ('Very High', 100)],
-                    'description': 'Only change this if you are using NZBget 9.0 or higher',
+                    'values': [('Very Low', -100), ('Low', -50), ('Normal', 0), ('High', 50), ('Very High', 100), ('Forced', 900)],
+                    'description': 'Only change this if you are using NZBget 13.0 or higher',
                 },
                 {
                     'name': 'manual',

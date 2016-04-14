@@ -8,7 +8,7 @@ var UpdaterBase = new Class({
 		App.addEvent('load', self.info.bind(self, 2000));
 		App.addEvent('unload', function(){
 			if(self.timer)
-				clearTimeout(self.timer);
+				clearRequestTimeout(self.timer);
 		});
 	},
 
@@ -27,16 +27,16 @@ var UpdaterBase = new Class({
 					App.trigger('message', ['No updates available']);
 				}
 			}
-		})
+		});
 
 	},
 
 	info: function(timeout){
 		var self = this;
 
-		if(self.timer) clearTimeout(self.timer);
+		if(self.timer) clearRequestTimeout(self.timer);
 
-		self.timer = setTimeout(function(){
+		self.timer = requestTimeout(function(){
 			Api.request('updater.info', {
 				'onComplete': function(json){
 					self.json = json;
@@ -50,8 +50,8 @@ var UpdaterBase = new Class({
 							self.message.destroy();
 					}
 				}
-			})
-		}, (timeout || 0))
+			});
+		}, (timeout || 0));
 
 	},
 
@@ -84,7 +84,7 @@ var UpdaterBase = new Class({
 					'click': self.doUpdate.bind(self)
 				}
 			})
-		).inject(document.body)
+		).inject(App.getBlock('footer'));
 	},
 
 	doUpdate: function(){
@@ -96,15 +96,17 @@ var UpdaterBase = new Class({
 				if(json.success)
 					self.updating();
 				else
-					App.unBlockPage()
+					App.unBlockPage();
 			}
 		});
 	},
 
 	updating: function(){
-		App.checkAvailable.delay(500, App, [1000, function(){
-			window.location.reload();
-		}]);
+		requestTimeout(function(){
+			App.checkAvailable(1000, function(){
+				window.location.reload();
+			});
+		}, 500);
 		if(self.message)
 			self.message.destroy();
 	}
